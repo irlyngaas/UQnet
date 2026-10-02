@@ -61,8 +61,8 @@ class CL_EarlyStopping:
         if self.baseline is not None:
             self.best = self.baseline
         else:
-            self.best = np.Inf if self.monitor_op == np.less else -np.Inf
-            # self.best = np.Inf
+            self.best = np.inf if self.monitor_op == np.less else -np.inf
+            # self.best = np.inf
         self.best_weights = None
 
 
@@ -80,6 +80,6 @@ class CL_EarlyStopping:
         if self.baseline is not None:
             self.best = self.baseline
         else:
-            self.best = np.Inf if self.monitor_op == np.less else -np.Inf
+            self.best = np.inf if self.monitor_op == np.less else -np.inf
         self.best_weights = None
 

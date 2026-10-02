@@ -126,7 +126,7 @@ class CL_trainer:
         if stopped_baseline is not None:
             best_loss = stopped_baseline
         else:
-            best_loss = np.Inf
+            best_loss = np.inf
         best_weights = None
 
 
@@ -343,7 +343,7 @@ class CL_trainer:
         if stopped_baseline is not None:
             best_loss = stopped_baseline
         else:
-            best_loss = np.Inf
+            best_loss = np.inf
         best_weights = None
 
         self.trainSteps.train_loss_net_std_up.reset_states()
@@ -527,7 +527,7 @@ class CL_trainer:
         if stopped_baseline is not None:
             best_loss = stopped_baseline
         else:
-            best_loss = np.Inf
+            best_loss = np.inf
         best_weights = None
 
         self.trainSteps.train_loss_net_std_down.reset_states()
