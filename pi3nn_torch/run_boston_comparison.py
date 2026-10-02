@@ -30,6 +30,7 @@ from sklearn.preprocessing import StandardScaler
 from .data import load_boston
 from .networks import UQNetMean, UQNetStd
 from .trainer import PI3NNTrainer
+from .distributed import setup_distributed, cleanup_distributed, is_main_process
 
 
 def main():
@@ -37,8 +38,22 @@ def main():
     parser.add_argument('--quantile', type=float, default=0.95)
     parser.add_argument('--seed', type=int, default=10)
     parser.add_argument('--verbose', type=int, default=1)
+    parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'])
     args = parser.parse_args()
 
+    # Single-process CPU (today's default) never touches torch.distributed
+    # at all -- this only activates DDP when launched with more than one
+    # SLURM/torchrun task. Every rank loads and scales the full dataset
+    # independently and identically (reading the same file, no MPI I/O
+    # needed for a dataset this small); PI3NNTrainer shards rows across
+    # ranks internally only for the gradient-step forward/backward.
+    rank, world_size, device = setup_distributed(use_gpu=(args.device == 'cuda'))
+    verbose = args.verbose if is_main_process() else 0
+
+    # DDP broadcasts rank 0's initial weights to every other rank as soon
+    # as PI3NNTrainer wraps the networks, so per-rank seed differences
+    # don't matter for correctness -- this seed only has to be consistent
+    # enough that rank 0's own initial weights are reproducible.
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -68,7 +83,7 @@ def main():
 
     configs = {
         'quantile': args.quantile,
-        'verbose': args.verbose,
+        'verbose': verbose,
         'Max_iter': 5000,
         'lr': [0.02, 0.02, 0.02],
         'optimizers': ['Adam', 'Adam', 'Adam'],
@@ -88,17 +103,25 @@ def main():
     trainer = PI3NNTrainer(
         configs, net_mean, net_up, net_down,
         x_train, y_train, x_valid, y_valid, x_test, y_test,
+        device=device,
     )
     trainer.train()
-    trainer.boundary_optimization(verbose=args.verbose)
+    trainer.boundary_optimization(verbose=verbose)
     results = trainer.evaluate(final_evaluation=True, verbose=0)
 
-    print('-' * 40)
-    print(f'Quantile target: {args.quantile}')
-    for k, v in results.items():
-        print(f'{k}: {v:.4f}')
-    print('-' * 40)
-    print('Compare against: python main_PI3NN.py --data boston --mode manual --quantile', args.quantile)
+    # Only rank 0 prints -- every process would otherwise redundantly
+    # print the same (identical, since DDP keeps weights in sync and every
+    # rank evaluates on the same full, unsharded train/valid/test data)
+    # results.
+    if is_main_process():
+        print('-' * 40)
+        print(f'Quantile target: {args.quantile}')
+        for k, v in results.items():
+            print(f'{k}: {v:.4f}')
+        print('-' * 40)
+        print('Compare against: python main_PI3NN.py --data boston --mode manual --quantile', args.quantile)
+
+    cleanup_distributed()
 
 
 if __name__ == '__main__':
